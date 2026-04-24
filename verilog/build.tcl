@@ -7,15 +7,15 @@ synth_design -top "top" -part "xc7s25csga324-1"
 report_utilization \
     -file utilization.rpt
 
-report_timing_summary \
-    -file timing_summary.rpt \
-    -report_unconstrained \
-    -max_paths 10
+report_timing \
+    -file timing_summary.rpt
 
 # place and route
 opt_design
 place_design
 route_design
+
+file delete -force clockInfo.txt
 
 # write bitstream
 write_bitstream -force "main.bit"
