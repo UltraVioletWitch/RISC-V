@@ -1,8 +1,8 @@
-read_verilog -sv { "./srcs/top.sv" }
+read_verilog -sv { "./srcs/main.sv" }
 
 read_xdc "./srcs/Arty-S7-25-Master.xdc"
 
-synth_design -top "top" -part "xc7s25csga324-1"
+synth_design -top "main" -part "xc7s25csga324-1"
 
 report_utilization \
     -file utilization.rpt
