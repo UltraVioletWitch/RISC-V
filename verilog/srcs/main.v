@@ -4,8 +4,6 @@ module main (
     output wire led
 );
 
-    wire [31:0] bus;
-
     cpu core (
         .clk(clk),
         .reset(reset),

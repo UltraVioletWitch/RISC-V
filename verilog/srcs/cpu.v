@@ -16,8 +16,24 @@ module cpu (
     localparam ADD = 4'b0000, SUB = 4'b0001, XOR = 4'b0010, OR = 4'b0011, AND = 4'b0100, SLL = 4'b0101, SRL = 4'b0110, SRA = 4'b0111, SLT = 4'b1000, SLTU = 4'b1001;
     // pc, instruction mem, and instruction declaration
     reg [31:0] pc, pc_next;
-    reg [7:0] iMem [65535:0];
+    reg [31:0] iMem [65535:0];
+    reg [31:0] dMem [65535:0];
+    wire [31:0] rdMem;
     wire [31:0] instruction;
+
+    reg RegWrite, ALUSrc, Branch, MemRead, MemWrite;
+    reg [3:0] ALUCtrl;
+    reg [2:0] toReg;
+    reg [1:0] PCSrc;
+
+    reg [31:0] immGen;
+
+    wire [4:0] opcode;
+    assign opcode = instruction[6:2];
+
+    reg [2:0] type;
+
+    reg [31:0] alu, alu_in1, alu_in2;
 
     // pc assignment with reset
     always @(posedge clk or posedge reset) begin
@@ -30,15 +46,17 @@ module cpu (
 
     // next pc logic
     always @* begin
-        if (PCSrc) begin
+        if (PCSrc == 2'b01) begin
             pc_next = pc + immGen;
+        end else if (PCSrc == 2'b10) begin
+            pc_next = alu;
         end else begin
             pc_next = pc + 4;
         end
     end
 
     // instruction assembly
-    assign instruction = {iMem[pc+3], iMem[pc+2], iMem[pc+1], iMem[pc]};
+    assign instruction = iMem[pc >> 2];
 
     // registers declaration
     reg [31:0] regs [31:0];
@@ -51,15 +69,16 @@ module cpu (
     assign rdReg2 = regs[instruction[24:20]];
 
     // write to registers
-    assign wrReg = (MemtoReg) ? dMem[alu] : alu;
-    always @* begin
+    assign wrReg = (toReg == 3'b000) ? alu :
+                   (toReg == 3'b001) ? pc + 4 :
+                   (toReg == 3'b010) ? dMem[alu] :
+                   (toReg == 3'b011) ? pc + immGen :
+                                       immGen;
+    always @(posedge clk) begin
         if (RegWrite) begin
             regs[instruction[11:7]] <= wrReg;
         end
     end
-
-    // ALU
-    reg [31:0] alu, alu_in1, alu_in2;
 
     wire Zero;
     assign Zero = (alu == 0) ? 1 : 0;
@@ -90,17 +109,20 @@ module cpu (
         endcase
     end
 
-    reg [7:0] dMem [65535:0];
-    wire [31:0] rdMem;
-    assign rdMem = (MemRead) ? dMem[alu] : 0;
+    reg [31:0] mem_addr;
 
-    always @* begin
+    always @(posedge clk) begin
+        mem_addr <= alu;
+    end
+    assign rdMem = dMem[mem_addr];
+
+    always @(posedge clk) begin
         if (MemWrite) begin
-            dMem[alu] = rdReg2;
+            dMem[mem_addr] <= rdReg2;
         end
     end
 
-    reg [31:0] immGen;
+
     always @* begin
         case (type)
             I_type: immGen = {{21{instruction[31]}}, instruction[30:25], instruction[24:21], instruction[20]};
@@ -111,11 +133,6 @@ module cpu (
             default: immGen = 32'b0;
         endcase
     end
-
-    wire [4:0] opcode;
-    assign opcode = instruction[6:2];
-
-    reg [2:0] type;
 
     always @* begin
         case (opcode)
@@ -133,10 +150,6 @@ module cpu (
         endcase
     end
 
-    // instruction decoding and control
-    reg RegWrite, ALUSrc, Shift, Branch, PCSrc, MemRead, MemWrite, MemtoReg;
-    reg [3:0] ALUCtrl;
-
     always @* begin
         case (opcode)
             OP: begin
@@ -145,7 +158,7 @@ module cpu (
                 Branch = 0;
                 MemRead = 0;
                 MemWrite = 0;
-                MemtoReg = 0;
+                toReg = 3'b000;
 
                 case (instruction[31:25])
                     7'h00: begin
@@ -164,8 +177,10 @@ module cpu (
                         case (instruction[14:12])
                             3'h0: ALUCtrl = SUB;
                             3'h5: ALUCtrl = SRA;
+                            default: ALUCtrl = ADD;
                         endcase
                     end
+                    default: ALUCtrl = ADD;
                 endcase
             end
             OP_IMM: begin
@@ -174,7 +189,7 @@ module cpu (
                 Branch = 0;
                 MemRead = 0;
                 MemWrite = 0;
-                MemtoReg = 0;
+                toReg = 3'b000;
 
                 case (instruction[31:25])
                     7'h00: begin
@@ -192,33 +207,47 @@ module cpu (
                     7'h20: begin
                         case (instruction[14:12])
                             3'h5: ALUCtrl = SRA;
+                            default: ALUCtrl = ADD;
                         endcase
                     end
+                    default: ALUCtrl = ADD;
                 endcase
             end
             LOAD: begin
                 RegWrite = 1;
-                ALUSrc = 0;
+                ALUSrc = 1;
                 Branch = 0;
-                MemRead = 0;
+                MemRead = 1;
                 MemWrite = 0;
-                MemtoReg = 0;
+                ALUCtrl = ADD;
+                toReg = 3'b010;
             end
             STORE: begin
-                RegWrite = 1;
-                ALUSrc = 0;
+                RegWrite = 0;
+                ALUSrc = 1;
                 Branch = 0;
                 MemRead = 0;
-                MemWrite = 0;
-                MemtoReg = 0;
+                MemWrite = 1;
+                ALUCtrl = ADD;
+                toReg = 3'b000;
             end
             BRANCH: begin
-                RegWrite = 1;
+                RegWrite = 0;
                 ALUSrc = 0;
-                Branch = 0;
+                Branch = 1;
                 MemRead = 0;
                 MemWrite = 0;
-                MemtoReg = 0;
+                toReg = 3'b000;
+
+                case (instruction[14:12])
+                    3'h0: ALUCtrl = SUB;
+                    3'h1: ALUCtrl = SUB;
+                    3'h4: ALUCtrl = SLT;
+                    3'h5: ALUCtrl = SLT;
+                    3'h6: ALUCtrl = SLTU;
+                    3'h7: ALUCtrl = SLTU;
+                    default: ALUCtrl = ADD;
+                endcase
             end
             JAL: begin
                 RegWrite = 1;
@@ -226,7 +255,8 @@ module cpu (
                 Branch = 0;
                 MemRead = 0;
                 MemWrite = 0;
-                MemtoReg = 0;
+                ALUCtrl = ADD;
+                toReg = 3'b001;
             end
             JALR: begin
                 RegWrite = 1;
@@ -234,15 +264,17 @@ module cpu (
                 Branch = 0;
                 MemRead = 0;
                 MemWrite = 0;
-                MemtoReg = 0;
+                ALUCtrl = ADD;
+                toReg = 3'b001;
             end
             LUI: begin
-                RegWrite = 1;
+                RegWrite = 0;
                 ALUSrc = 0;
                 Branch = 0;
                 MemRead = 0;
                 MemWrite = 0;
-                MemtoReg = 0;
+                ALUCtrl = ADD;
+                toReg = 3'b100;
             end
             AUIPC: begin
                 RegWrite = 1;
@@ -250,15 +282,17 @@ module cpu (
                 Branch = 0;
                 MemRead = 0;
                 MemWrite = 0;
-                MemtoReg = 0;
+                ALUCtrl = ADD;
+                toReg = 3'b011;
             end
             SYSTEM: begin
-                RegWrite = 1;
+                RegWrite = 0;
                 ALUSrc = 0;
                 Branch = 0;
                 MemRead = 0;
                 MemWrite = 0;
-                MemtoReg = 0;
+                ALUCtrl = ADD;
+                toReg = 3'b000;
             end
             default: begin
                 RegWrite = 0;
@@ -266,7 +300,8 @@ module cpu (
                 Branch = 0;
                 MemRead = 0;
                 MemWrite = 0;
-                MemtoReg = 0;
+                ALUCtrl = ADD;
+                toReg = 3'b000;
             end
         endcase
     end
@@ -274,7 +309,23 @@ module cpu (
     // branching logic
     always @* begin
         if (Branch) begin
-            PCSrc = 1;
+            case (opcode) 
+                BRANCH: begin
+                    PCSrc[1] = 0;
+                    case (instruction[14:12])
+                        3'h0: PCSrc[0] = Zero;
+                        3'h1: PCSrc[0] = ~Zero;
+                        3'h4: PCSrc[0] = alu[0];
+                        3'h5: PCSrc[0] = ~alu[0];
+                        3'h6: PCSrc[0] = alu[0];
+                        3'h7: PCSrc[0] = ~alu[0];
+                        default: PCSrc[0] = 0;
+                    endcase
+                end
+                JAL: PCSrc = 2'b01;
+                JALR: PCSrc = 2'b10;
+                default: PCSrc = 2'b00;
+            endcase
         end else begin
             PCSrc = 0;
         end

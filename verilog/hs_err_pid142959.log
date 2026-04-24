@@ -1,0 +1,18 @@
+#
+# An unexpected error has occurred (11) Segmentation fault
+#
+Stack:
+/lib/x86_64-linux-gnu/libc.so.6(+0x45f60) [0x7050a3045f60]
+/home/violet/Vitis/2025.2/Vivado/lib/lnx64.o/libxv_ntl.so(HDNTPin::getBus() const+0) [0x70509f7b0130]
+/home/violet/Vitis/2025.2/Vivado/lib/lnx64.o/libxv_ntl.so(HDNTPin::getBaseName[abi:cxx11]() const+0x18) [0x70509f7b01b8]
+/home/violet/Vitis/2025.2/Vivado/lib/lnx64.o/libxv_ntl.so(HDNTPin::getName[abi:cxx11](bool) const+0x1f) [0x70509f7b131f]
+/home/violet/Vitis/2025.2/Vivado/lib/lnx64.o/libxv_device.so(HARParse::markIncompletePinMaps(HDSMSitemap*)+0x23f) [0x705070e9db1f]
+/home/violet/Vitis/2025.2/Vivado/lib/lnx64.o/libxv_device.so(HARParse::parseSitemap()+0x501) [0x705070ea04e1]
+/home/violet/Vitis/2025.2/Vivado/lib/lnx64.o/libxv_device.so(HARParse::parseArchitecture(bool)+0x15bf) [0x705070ea1eb7]
+/home/violet/Vitis/2025.2/Vivado/lib/lnx64.o/libxv_device.so(HARPartLoader::loadFiles(HDARPart*, bool)+0xbe7) [0x7050712d2f31]
+/home/violet/Vitis/2025.2/Vivado/lib/lnx64.o/libxv_device.so(HARPartLoader::loadArch(HDARPart const*, bool, bool)+0x1dae) [0x7050712d69fe]
+/home/violet/Vitis/2025.2/Vivado/lib/lnx64.o/libxv_synth.so(HARTPADelayMgr::loadPart(UKeyword, char const*, char const*, char const*)+0x5ec) [0x705090f2960c]
+/home/violet/Vitis/2025.2/Vivado/lib/lnx64.o/libxv_synth.so(HARTNDb::loadPartOld(char const*, NDbC*)+0xcf) [0x7050918c92ef]
+/home/violet/Vitis/2025.2/Vivado/lib/lnx64.o/libxv_synth.so(+0x1cc9550) [0x7050918c9550]
+/lib/x86_64-linux-gnu/libc.so.6(+0xa3d64) [0x7050a30a3d64]
+/lib/x86_64-linux-gnu/libc.so.6(+0x1373fc) [0x7050a31373fc]
