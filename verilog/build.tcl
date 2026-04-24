@@ -1,4 +1,4 @@
-read_verilog -sv { "./srcs/main.sv" }
+read_verilog { "./srcs/main.v" }
 
 read_xdc "./srcs/Arty-S7-25-Master.xdc"
 
