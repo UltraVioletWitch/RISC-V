@@ -1,3 +1,5 @@
 verilog/clockInfo.txt
 verilog/main.bit
 verilog/.Xil/
+verilog/utilization.rpt
+verilog/timing_summary.rpt
