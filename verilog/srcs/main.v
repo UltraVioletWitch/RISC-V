@@ -5,14 +5,14 @@
 `default_nettype none
 `timescale 1ns / 1ps
 
-module top (
-    input wire logic clk,
-    output     logic [3:0] led
+module main (
+    input wire clk,
+    output reg [3:0] led
     );
 
-    logic [31:0] cnt = 0;  // 32-bit counter
+    reg [31:0] cnt = 0;  // 32-bit counter
 
-    always_ff @(posedge clk) begin
+    always @(posedge clk) begin
         cnt <= cnt + 1;
         led[0] <= cnt[26];
         led[1] <= cnt[24];
