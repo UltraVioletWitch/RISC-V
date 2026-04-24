@@ -1,2 +1,5 @@
 build:
-	@vivado -mode batch -source build.tcl
+	@vivado -mode batch -nojournal -nolog -source build.tcl
+
+synth:
+	@vivado -mode batch -nojournal -nolog -source synth.tcl

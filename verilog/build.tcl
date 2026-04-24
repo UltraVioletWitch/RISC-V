@@ -9,6 +9,9 @@ synth_design -top "main" -part "xc7s25csga324-1"
 report_utilization \
     -file utilization.rpt
 
+set wns [get_property SLACK [get_timing_paths]]
+puts "Worst Negative Slack (WNS): $wns"
+
 report_timing \
     -file timing_summary.rpt
 

@@ -16,15 +16,15 @@ module cpu (
     localparam ADD = 4'b0000, SUB = 4'b0001, XOR = 4'b0010, OR = 4'b0011, AND = 4'b0100, SLL = 4'b0101, SRL = 4'b0110, SRA = 4'b0111, SLT = 4'b1000, SLTU = 4'b1001;
     // pc, instruction mem, and instruction declaration
     reg [31:0] pc, pc_next;
-    reg [31:0] iMem [65535:0];
-    reg [31:0] dMem [65535:0];
+    reg [31:0] iMem [16383:0];
+    reg [31:0] dMem [16383:0];
     wire [31:0] rdMem;
     wire [31:0] instruction;
 
-    reg RegWrite, ALUSrc, Branch, MemRead, MemWrite;
+    reg RegWrite, ALUSrc, MemRead, MemWrite;
     reg [3:0] ALUCtrl;
     reg [2:0] toReg;
-    reg [1:0] PCSrc;
+    reg PCSrc;
 
     reg [31:0] immGen;
 
@@ -44,18 +44,6 @@ module cpu (
         end
     end
 
-    // next pc logic
-    always @* begin
-        if (PCSrc == 2'b01) begin
-            pc_next = pc + immGen;
-        end else if (PCSrc == 2'b10) begin
-            pc_next = alu;
-        end else begin
-            pc_next = pc + 4;
-        end
-    end
-
-    // instruction assembly
     assign instruction = iMem[pc >> 2];
 
     // registers declaration
@@ -71,25 +59,19 @@ module cpu (
     // write to registers
     assign wrReg = (toReg == 3'b000) ? alu :
                    (toReg == 3'b001) ? pc + 4 :
-                   (toReg == 3'b010) ? dMem[alu] :
+                   (toReg == 3'b010) ? rdMem :
                    (toReg == 3'b011) ? pc + immGen :
                                        immGen;
     always @(posedge clk) begin
-        if (RegWrite) begin
+        if (RegWrite && instruction[11:7] != 5'b0) begin
             regs[instruction[11:7]] <= wrReg;
         end
     end
 
-    wire Zero;
-    assign Zero = (alu == 0) ? 1 : 0;
-
     always @* begin
-        alu_in1 = rdReg1;
+        alu_in1 = (opcode == AUIPC) ? pc : rdReg1;
         if (ALUSrc) begin
-            if (opcode == OP_IMM && (ALUCtrl == SLL || ALUCtrl == SRL || ALUCtrl == SRA))
-                alu_in2 = immGen[4:0];
-            else
-                alu_in2 = immGen;
+            alu_in2 = immGen;
         end else begin
             alu_in2 = rdReg2;
         end
@@ -99,36 +81,32 @@ module cpu (
             OR: alu = alu_in1 | alu_in2;
             ADD: alu = alu_in1 + alu_in2;
             XOR: alu = alu_in1 ^ alu_in2;
-            SLL: alu = alu_in1 << alu_in2;
-            SRL: alu = alu_in1 >> alu_in2;
+            SLL: alu = alu_in1 << alu_in2[4:0];
+            SRL: alu = alu_in1 >> alu_in2[4:0];
             SUB: alu = alu_in1 - alu_in2;
-            SRA: alu = alu_in1 >>> alu_in2;
+            SRA: alu = $signed(alu_in1) >>> alu_in2[4:0];
             SLT: alu = ($signed(alu_in1) < $signed(alu_in2)) ? 1 : 0;
             SLTU: alu = (alu_in1 < alu_in2) ? 1 : 0;
             default: alu = alu_in1 + alu_in2;
         endcase
     end
 
-    reg [31:0] mem_addr;
+    wire [31:0] mem_addr = alu;
 
     always @(posedge clk) begin
-        mem_addr <= alu;
+        if (MemWrite)
+            dMem[mem_addr >> 2] <= rdReg2;
     end
-    assign rdMem = dMem[mem_addr];
 
-    always @(posedge clk) begin
-        if (MemWrite) begin
-            dMem[mem_addr] <= rdReg2;
-        end
-    end
+    assign rdMem = (MemRead) ? dMem[mem_addr >> 2] : 32'b0;
 
 
     always @* begin
         case (type)
-            I_type: immGen = {{21{instruction[31]}}, instruction[30:25], instruction[24:21], instruction[20]};
-            S_type: immGen = {{21{instruction[31]}}, instruction[30:25], instruction[11:8], instruction[7]};
+            I_type: immGen = {{20{instruction[31]}}, instruction[31:20]};
+            S_type: immGen = {{20{instruction[31]}}, instruction[31:25], instruction[11:7]};
             B_type: immGen = {{20{instruction[31]}}, instruction[7], instruction[30:25], instruction[11:8], 1'b0};
-            U_type: immGen = {instruction[31], instruction[30:20], instruction[19:12], {12{1'b0}}};
+            U_type: immGen = {instruction[31:12], 12'b0};
             J_type: immGen = {{12{instruction[31]}}, instruction[19:12], instruction[20], instruction[30:25], instruction[24:21], 1'b0};
             default: immGen = 32'b0;
         endcase
@@ -150,12 +128,23 @@ module cpu (
         endcase
     end
 
+    wire eq = (rdReg1 == rdReg2);
+    wire lt = ($signed(rdReg1) < $signed(rdReg2));
+    wire ltu = (rdReg1 < rdReg2);
+
     always @* begin
+        RegWrite = 0;
+        ALUSrc = 0;
+        MemRead = 0;
+        MemWrite = 0;
+        ALUCtrl = ADD;
+        toReg = 3'b000;
+        PCSrc = 1'b0;
+        pc_next = pc + 4;
         case (opcode)
             OP: begin
                 RegWrite = 1;
                 ALUSrc = 0;
-                Branch = 0;
                 MemRead = 0;
                 MemWrite = 0;
                 toReg = 3'b000;
@@ -186,37 +175,29 @@ module cpu (
             OP_IMM: begin
                 RegWrite = 1;
                 ALUSrc = 1;
-                Branch = 0;
                 MemRead = 0;
                 MemWrite = 0;
                 toReg = 3'b000;
 
-                case (instruction[31:25])
-                    7'h00: begin
-                        case (instruction[14:12])
-                            3'h0: ALUCtrl = ADD;
-                            3'h1: ALUCtrl = SLL;
-                            3'h2: ALUCtrl = SLT;
-                            3'h3: ALUCtrl = SLTU;
-                            3'h4: ALUCtrl = XOR;
-                            3'h5: ALUCtrl = SRL;
-                            3'h6: ALUCtrl = OR;
-                            3'h7: ALUCtrl = AND;
-                        endcase
+                case (instruction[14:12])
+                    3'h0: ALUCtrl = ADD;
+                    3'h1: ALUCtrl = SLL;
+                    3'h2: ALUCtrl = SLT;
+                    3'h3: ALUCtrl = SLTU;
+                    3'h4: ALUCtrl = XOR;
+                    3'h5: begin
+                        if (instruction[30] == 1)
+                            ALUCtrl = SRA;
+                        else
+                            ALUCtrl = SRL;
                     end
-                    7'h20: begin
-                        case (instruction[14:12])
-                            3'h5: ALUCtrl = SRA;
-                            default: ALUCtrl = ADD;
-                        endcase
-                    end
-                    default: ALUCtrl = ADD;
+                    3'h6: ALUCtrl = OR;
+                    3'h7: ALUCtrl = AND;
                 endcase
             end
             LOAD: begin
                 RegWrite = 1;
                 ALUSrc = 1;
-                Branch = 0;
                 MemRead = 1;
                 MemWrite = 0;
                 ALUCtrl = ADD;
@@ -225,7 +206,6 @@ module cpu (
             STORE: begin
                 RegWrite = 0;
                 ALUSrc = 1;
-                Branch = 0;
                 MemRead = 0;
                 MemWrite = 1;
                 ALUCtrl = ADD;
@@ -234,43 +214,46 @@ module cpu (
             BRANCH: begin
                 RegWrite = 0;
                 ALUSrc = 0;
-                Branch = 1;
                 MemRead = 0;
                 MemWrite = 0;
                 toReg = 3'b000;
 
                 case (instruction[14:12])
-                    3'h0: ALUCtrl = SUB;
-                    3'h1: ALUCtrl = SUB;
-                    3'h4: ALUCtrl = SLT;
-                    3'h5: ALUCtrl = SLT;
-                    3'h6: ALUCtrl = SLTU;
-                    3'h7: ALUCtrl = SLTU;
-                    default: ALUCtrl = ADD;
+                    3'h0: PCSrc = eq;
+                    3'h1: PCSrc = ~eq;
+                    3'h4: PCSrc = lt;
+                    3'h5: PCSrc = ~lt;
+                    3'h6: PCSrc = ltu;
+                    3'h7: PCSrc = ~ltu;
+                    default: PCSrc = 1'b0;
                 endcase
+
+                if (PCSrc)
+                    pc_next = pc + immGen;
+                else
+                    pc_next = pc + 4;
             end
             JAL: begin
                 RegWrite = 1;
                 ALUSrc = 0;
-                Branch = 0;
                 MemRead = 0;
                 MemWrite = 0;
                 ALUCtrl = ADD;
                 toReg = 3'b001;
+                pc_next = pc + immGen;
             end
             JALR: begin
                 RegWrite = 1;
-                ALUSrc = 0;
-                Branch = 0;
+                ALUSrc = 1;
                 MemRead = 0;
                 MemWrite = 0;
                 ALUCtrl = ADD;
                 toReg = 3'b001;
+                pc_next = (rdReg1 + immGen) & ~32'b1;
             end
             LUI: begin
-                RegWrite = 0;
+                RegWrite = 1;
                 ALUSrc = 0;
-                Branch = 0;
                 MemRead = 0;
                 MemWrite = 0;
                 ALUCtrl = ADD;
@@ -279,7 +262,6 @@ module cpu (
             AUIPC: begin
                 RegWrite = 1;
                 ALUSrc = 0;
-                Branch = 0;
                 MemRead = 0;
                 MemWrite = 0;
                 ALUCtrl = ADD;
@@ -288,7 +270,6 @@ module cpu (
             SYSTEM: begin
                 RegWrite = 0;
                 ALUSrc = 0;
-                Branch = 0;
                 MemRead = 0;
                 MemWrite = 0;
                 ALUCtrl = ADD;
@@ -297,38 +278,12 @@ module cpu (
             default: begin
                 RegWrite = 0;
                 ALUSrc = 0;
-                Branch = 0;
                 MemRead = 0;
                 MemWrite = 0;
                 ALUCtrl = ADD;
                 toReg = 3'b000;
             end
         endcase
-    end
-
-    // branching logic
-    always @* begin
-        if (Branch) begin
-            case (opcode) 
-                BRANCH: begin
-                    PCSrc[1] = 0;
-                    case (instruction[14:12])
-                        3'h0: PCSrc[0] = Zero;
-                        3'h1: PCSrc[0] = ~Zero;
-                        3'h4: PCSrc[0] = alu[0];
-                        3'h5: PCSrc[0] = ~alu[0];
-                        3'h6: PCSrc[0] = alu[0];
-                        3'h7: PCSrc[0] = ~alu[0];
-                        default: PCSrc[0] = 0;
-                    endcase
-                end
-                JAL: PCSrc = 2'b01;
-                JALR: PCSrc = 2'b10;
-                default: PCSrc = 2'b00;
-            endcase
-        end else begin
-            PCSrc = 0;
-        end
     end
 
     assign out = pc[28];
