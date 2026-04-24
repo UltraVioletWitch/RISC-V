@@ -9,9 +9,7 @@ module main (
     cpu core (
         .clk(clk),
         .reset(reset),
-        .bus(bus)
+        .out(led)
     );
-
-    assign led = bus[31];
 
 endmodule
