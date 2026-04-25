@@ -1,7 +1,8 @@
 module cpu (
     input wire clk,
     input wire reset,
-    output wire out
+    output wire out,
+    output reg illegal_instr
 );
 
     // type definitions
@@ -17,6 +18,7 @@ module cpu (
     // pc, instruction mem, and instruction declaration
     reg [31:0] pc, pc_next;
     reg [31:0] iMem [16383:0];
+    initial $readmemh("program.hex", iMem);
     reg [31:0] dMem [16383:0];
     wire [31:0] rdMem;
     wire [31:0] instruction;
@@ -48,6 +50,7 @@ module cpu (
 
     // registers declaration
     reg [31:0] regs [31:0];
+    initial regs[0] = 32'b0;
 
     // instruction registers declaration
     wire [31:0] rdReg1, rdReg2, wrReg;
@@ -64,7 +67,40 @@ module cpu (
                                        immGen;
     always @(posedge clk) begin
         if (RegWrite && instruction[11:7] != 5'b0) begin
-            regs[instruction[11:7]] <= wrReg;
+            if (opcode == LOAD)
+                case (instruction[14:12])
+                    3'h0: begin
+                        case (mem_addr[1:0])
+                            2'b00: regs[instruction[11:7]] <= {{24{rdMem[7]}}, rdMem[7:0]};
+                            2'b01: regs[instruction[11:7]] <= {{24{rdMem[15]}}, rdMem[15:8]};
+                            2'b10: regs[instruction[11:7]] <= {{24{rdMem[23]}}, rdMem[23:16]};
+                            2'b11: regs[instruction[11:7]] <= {{24{rdMem[31]}}, rdMem[31:24]};
+                        endcase
+                    end
+                    3'h1: begin
+                        if (mem_addr[1])
+                            regs[instruction[11:7]] <= {{16{rdMem[31]}}, rdMem[31:16]};
+                        else
+                            regs[instruction[11:7]] <= {{16{rdMem[15]}}, rdMem[15:0]};
+                    end
+                    3'h2: regs[instruction[11:7]] <= rdMem;
+                    3'h4: begin
+                        case (mem_addr[1:0])
+                            2'b00: regs[instruction[11:7]] <= {24'b0, rdMem[7:0]};
+                            2'b01: regs[instruction[11:7]] <= {24'b0, rdMem[15:8]};
+                            2'b10: regs[instruction[11:7]] <= {24'b0, rdMem[23:16]};
+                            2'b11: regs[instruction[11:7]] <= {24'b0, rdMem[31:24]};
+                        endcase
+                    end
+                    3'h5: begin
+                        if (mem_addr[1])
+                            regs[instruction[11:7]] <= {16'b0, rdMem[31:16]};
+                        else
+                            regs[instruction[11:7]] <= {16'b0, rdMem[15:0]};
+                    end
+                endcase
+            else
+                regs[instruction[11:7]] <= wrReg;
         end
     end
 
@@ -95,7 +131,23 @@ module cpu (
 
     always @(posedge clk) begin
         if (MemWrite)
-            dMem[mem_addr >> 2] <= rdReg2;
+            case (instruction[14:12])
+                3'h0: begin
+                    case (mem_addr[1:0])
+                        2'b00: dMem[mem_addr >> 2][7:0] <= rdReg2[7:0];
+                        2'b01: dMem[mem_addr >> 2][15:8] <= rdReg2[7:0];
+                        2'b10: dMem[mem_addr >> 2][23:16] <= rdReg2[7:0];
+                        2'b11: dMem[mem_addr >> 2][31:24] <= rdReg2[7:0];
+                    endcase
+                end
+                3'h1: begin
+                    if (mem_addr[1])
+                        dMem[mem_addr >> 2][31:16] <= rdReg2[15:0];
+                    else
+                        dMem[mem_addr >> 2][15:0] <= rdReg2[15:0];
+                end
+                3'h2: dMem[mem_addr >> 2]       <= rdReg2;
+            endcase
     end
 
     assign rdMem = (MemRead) ? dMem[mem_addr >> 2] : 32'b0;
@@ -141,6 +193,8 @@ module cpu (
         toReg = 3'b000;
         PCSrc = 1'b0;
         pc_next = pc + 4;
+        illegal_instr = 0;
+
         case (opcode)
             OP: begin
                 RegWrite = 1;
@@ -282,6 +336,8 @@ module cpu (
                 MemWrite = 0;
                 ALUCtrl = ADD;
                 toReg = 3'b000;
+
+                illegal_instr = 1;
             end
         endcase
     end
