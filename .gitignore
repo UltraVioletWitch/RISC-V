@@ -23,6 +23,6 @@ c/program.bin
 c/program.elf
 c/program.hex
 
-riscv-arch-test/
+riscv-tests/
 
 ice/
