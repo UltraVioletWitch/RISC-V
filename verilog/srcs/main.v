@@ -21,6 +21,6 @@ module main (
         .gpio_out(gpio_out),
         .gpio_dir(gpio_dir),
         .gpio(gpio)
-    );
+    ); 
 
 endmodule

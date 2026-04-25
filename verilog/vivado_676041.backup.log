@@ -1,0 +1,94 @@
+#-----------------------------------------------------------
+# Vivado v2025.2 (64-bit)
+# SW Build 6299465 on Fri Nov 14 12:34:56 MST 2025
+# IP Build 6300035 on Fri Nov 14 10:48:45 MST 2025
+# SharedData Build 6298862 on Thu Nov 13 04:50:51 MST 2025
+# Start of session at: Sat Apr 25 14:18:30 2026
+# Process ID         : 676041
+# Current directory  : /home/violet/Documents/Projects/RISC-V/verilog
+# Command line       : vivado -mode tcl
+# Log file           : /home/violet/Documents/Projects/RISC-V/verilog/vivado.log
+# Journal file       : /home/violet/Documents/Projects/RISC-V/verilog/vivado.jou
+# Running On         : violets-laptop
+# Platform           : Ubuntu
+# Operating System   : Ubuntu 25.10
+# Processor Detail   : AMD Ryzen AI 5 340 w/ Radeon 840M
+# CPU Frequency      : 1352.462 MHz
+# CPU Physical cores : 6
+# CPU Logical cores  : 12
+# Host memory        : 15476 MB
+# Swap memory        : 4294 MB
+# Total Virtual      : 19771 MB
+# Available Virtual  : 11060 MB
+#-----------------------------------------------------------
+WARNING: [Labtoolstcl 44-486] No matching hw_cfgmems found
+open_hw_manager
+connect_hw_server
+INFO: [Labtools 27-2285] Connecting to hw_server url TCP:localhost:3121
+INFO: [Labtools 27-2222] Launching hw_server...
+INFO: [Labtools 27-2221] Launch Output:
+
+****** Xilinx hw_server v2025.2
+  **** Build date : Oct 28 2025 at 16:07:00
+    ** Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+
+
+INFO: [Labtools 27-3415] Connecting to cs_server url TCP:localhost:0
+INFO: [Labtools 27-3417] Launching cs_server...
+INFO: [Labtools 27-2221] Launch Output:
+
+
+******** Xilinx cs_server v2025.2.0
+  ****** Build date   : Nov 13 2025-17:16:52
+    **** Build number : 2025.2.1763075812
+      ** Copyright 2017-2022 Xilinx, Inc. All Rights Reserved.
+      ** Copyright 2022-2026 Advanced Micro Devices, Inc. All Rights Reserved.
+
+
+
+localhost:3121
+open_hw_target
+INFO: [Labtoolstcl 44-466] Opening hw_target localhost:3121/xilinx_tcf/Digilent/210352BF97CDA
+set cfgmem_part [lindex [get_cfgmem_parts *128*spi*x1_x2_x4] 0]
+IS25WJ128f-spi-x1_x2_x4
+set cfgmem [get_hw_cfgmems *]
+WARNING: [Labtoolstcl 44-486] No matching hw_cfgmems found
+set hw_device [lindex [get_hw_devices] 0]
+xc7s25_0
+current_hw_device $hw_device
+xc7s25_0
+create_hw_cfgmem -hw_device $hw_device $cfgmem_part
+cfgmem_0
+set cfgmem [get_hw_cfgmems *]
+cfgmem_0
+report_property $cfgmem
+Property                             Type         Read-only  Value
+CFGMEM_PART                          cfgmem_part  false      IS25WJ128f-spi-x1_x2_x4
+CLASS                                string       true       hw_cfgmem
+NAME                                 string       false      cfgmem_0
+PROGRAM.BLANK_CHECK                  bool         false      0
+PROGRAM.CFG_PROGRAM                  bool         false      0
+PROGRAM.EMMC_CLOCK_FREQUENCY         enum         false      50Mhz
+PROGRAM.EMMC_CLUSTER_SIZE            int          true       1
+PROGRAM.EMMC_DEVICE_INDEX            int          false      10
+PROGRAM.EMMC_FILE_DATA_BASE_ADDRESS  hex          false      00000000
+PROGRAM.EMMC_FILE_DATA_CHUNK_SIZE    int          false      262144
+PROGRAM.EMMC_PARTITION_APP           string       false      
+PROGRAM.EMMC_PARTITION_NUMBER        int          false      1
+PROGRAM.EMMC_PARTITION_SIZE          enum         false      small
+PROGRAM.EMMC_PARTITION_TYPE          enum         false      fat32
+PROGRAM.EMMC_SD_CONFIG_REG1          hex          false      00000000
+PROGRAM.EMMC_SD_ITAP_DLY             hex          false      00000000
+PROGRAM.EMMC_SD_OTAP_DLY_SEL         hex          false      00000000
+PROGRAM.EMMC_STATIC_PARTITION_FILE   string       false      
+PROGRAM.ERASE                        bool         false      0
+PROGRAM.FILES                        string*      false      
+PROGRAM.MULTI_IMAGE_ERASE_OFFSETS    int*         false      
+PROGRAM.MULTI_IMAGE_ERASE_SIZE       int*         false      
+PROGRAM.MULTI_IMAGE_FILES            string*      false      
+PROGRAM.MULTI_IMAGE_OFFSETS          int*         false      
+PROGRAM.SKIP_QE_BIT_ERASE            bool         false      0
+PROGRAM.VERIFY                       bool         false      0
+PROGRAM.ZYNQ_FSBL                    string       false      
+exit
+INFO: [Common 17-206] Exiting Vivado at Sat Apr 25 14:21:35 2026...

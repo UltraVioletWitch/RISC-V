@@ -1,0 +1,51 @@
+#-----------------------------------------------------------
+# Vivado v2025.2 (64-bit)
+# SW Build 6299465 on Fri Nov 14 12:34:56 MST 2025
+# IP Build 6300035 on Fri Nov 14 10:48:45 MST 2025
+# SharedData Build 6298862 on Thu Nov 13 04:50:51 MST 2025
+# Start of session at: Sat Apr 25 15:14:14 2026
+# Process ID         : 697585
+# Current directory  : /home/violet/Documents/Projects/RISC-V/verilog
+# Command line       : vivado -mode tcl
+# Log file           : /home/violet/Documents/Projects/RISC-V/verilog/vivado.log
+# Journal file       : /home/violet/Documents/Projects/RISC-V/verilog/vivado.jou
+# Running On         : violets-laptop
+# Platform           : Ubuntu
+# Operating System   : Ubuntu 25.10
+# Processor Detail   : AMD Ryzen AI 5 340 w/ Radeon 840M
+# CPU Frequency      : 625.000 MHz
+# CPU Physical cores : 6
+# CPU Logical cores  : 12
+# Host memory        : 15476 MB
+# Swap memory        : 4294 MB
+# Total Virtual      : 19771 MB
+# Available Virtual  : 9811 MB
+#-----------------------------------------------------------
+get_cfgmem_parts
+get_cfgmem_parts s25*
+get_cfgmem_parts s25*fl128*
+get_cfgmem_parts s25*fl128*-spi&
+get_cfgmem_parts s25*fl128*-spi*
+get_cfgmem_parts s25*fl128*-spi-x1_x2_x4
+get_cfgmem_parts s25*fl128s*-spi-x1_x2_x4
+get_cfgmem_parts s25fl128sag*
+get_cfgmem_parts s25fl128s*
+get_cfgmem_parts s25fl128s*-spi*
+get_cfgmem_parts s25fl128s*-qspi*
+get_cfgmem_parts -of_objects [current_project]
+get_cfgmem_parts -of_objects
+get_cfgmem_parts -part xc7s*
+get_cfgmem_parts -help
+open_hardware_manager
+open_hw_manager
+connect_hw_server
+open_hw_target
+get_cfgmem_parts -of_objects [current_hw_device]
+get_cfgmem_parts -of_objects [current_hw_device] s25*
+get_cfgmem_parts -of_objects [current_hw_device] s25fl*
+get_cfgmem_parts -of_objects [current_hw_device] s25fl128*
+get_cfgmem_parts -of_objects [current_hw_device] *qspi*
+get_cfgmem_parts -of_objects [current_hw_device] *spi*
+get_cfgmem_parts -of_objects [current_hw_device] *128*
+get_cfgmem_parts -of_objects [current_hw_device] *128sag*
+get_cfgmem_parts -of_objects [current_hw_device] *128*
