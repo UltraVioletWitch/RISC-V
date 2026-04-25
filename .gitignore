@@ -1,8 +1,6 @@
 verilog/clockInfo.txt
 verilog/main.bit
 verilog/.Xil/
-verilog/utilization.rpt
-verilog/timing_summary.rpt
 verilog/util.txt
 verilog/io.txt
 verilog/timing.txt
@@ -11,6 +9,7 @@ verilog/test.dcp
 verilog/main.mcs
 verilog/main.bin
 verilog/main.prm
+verilog/tight_setup_hold_pins.txt
 
 assembly/program.bin
 assembly/program.elf
@@ -19,6 +18,7 @@ assembly/program.mem
 assembly/program.o
 
 c/main.o
+c/start.o
 c/program.bin
 c/program.elf
 c/program.hex
