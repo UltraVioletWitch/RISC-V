@@ -7,6 +7,11 @@ verilog/util.txt
 verilog/io.txt
 verilog/timing.txt
 verilog/method.txt
+verilog/test.dcp
+verilog/main.mcs
+verilog/main.bin
+verilog/main.prm
+
 
 c/main.o
 c/program.bin
