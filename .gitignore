@@ -12,6 +12,12 @@ verilog/main.mcs
 verilog/main.bin
 verilog/main.prm
 
+assembly/program.bin
+assembly/program.elf
+assembly/program.hex
+assembly/program.mem
+assembly/program.o
+
 c/main.o
 c/program.bin
 c/program.elf
