@@ -5,12 +5,16 @@ module cpu (
     output reg illegal_instr,
     input wire [15:0] gpio_in,
     output reg [15:0] gpio_out,
-    output reg [15:0] gpio_dir
+    output reg [15:0] gpio_dir,
+    input wire [7:0]  uart_rx,
+    output reg [7:0]  uart_tx
 );
 
     localparam GPIO_OUT_ADDR = 32'hF000_0000;
     localparam GPIO_IN_ADDR = 32'hF000_0004;
     localparam GPIO_DIR_ADDR = 32'hF000_0008;
+    
+    localparam UART_BASE = 32'hFF00_0000;
 
     // type definitions
     localparam R_type = 3'b000, I_type = 3'b001, S_type = 3'b010, B_type = 3'b011, U_type = 3'b100, J_type = 3'b101;
