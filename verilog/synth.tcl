@@ -2,6 +2,10 @@ read_verilog { "./srcs/cpu.v" "./srcs/main.v" }
 
 read_xdc "./srcs/Arty-S7-25-Master.xdc"
 
+add_files -norecurse {/home/violet/Documents/Projects/RISC-V/c/program.hex}
+set_property file_type {Memory Initialization Files} [get_files {program.hex}]
+update_compile_order -fileset sources_1
+
 # place and route
 puts "Starting synthesis..."
 synth_design -top "main" -part "xc7s25csga324-1"

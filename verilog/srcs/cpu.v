@@ -1,9 +1,16 @@
 module cpu (
     input wire clk,
     input wire reset,
-    output wire out,
-    output reg illegal_instr
+    output wire [3:0] out,
+    output reg illegal_instr,
+    input wire [7:0] gpio_in,
+    output reg [7:0] gpio_out,
+    output reg [7:0] gpio_dir
 );
+
+    localparam GPIO_OUT_ADDR = 32'hF000_0000;
+    localparam GPIO_IN_ADDR = 32'hF000_0004;
+    localparam GPIO_DIR_ADDR = 32'hF000_0008;
 
     // type definitions
     localparam R_type = 3'b000, I_type = 3'b001, S_type = 3'b010, B_type = 3'b011, U_type = 3'b100, J_type = 3'b101;
@@ -17,9 +24,9 @@ module cpu (
     localparam ADD = 4'b0000, SUB = 4'b0001, XOR = 4'b0010, OR = 4'b0011, AND = 4'b0100, SLL = 4'b0101, SRL = 4'b0110, SRA = 4'b0111, SLT = 4'b1000, SLTU = 4'b1001;
     // pc, instruction mem, and instruction declaration
     reg [31:0] pc, pc_next;
-    reg [31:0] iMem [16383:0];
+    reg [31:0] iMem [1023:0];
     initial $readmemh("program.hex", iMem);
-    reg [31:0] dMem [16383:0];
+    reg [31:0] dMem [1023:0];
     wire [31:0] rdMem;
     wire [31:0] instruction;
 
@@ -36,6 +43,7 @@ module cpu (
     reg [2:0] type;
 
     reg [31:0] alu, alu_in1, alu_in2;
+    wire [31:0] mem_addr = alu;
 
     // pc assignment with reset
     always @(posedge clk or posedge reset) begin
@@ -127,31 +135,42 @@ module cpu (
         endcase
     end
 
-    wire [31:0] mem_addr = alu;
-
     always @(posedge clk) begin
-        if (MemWrite)
-            case (instruction[14:12])
-                3'h0: begin
-                    case (mem_addr[1:0])
-                        2'b00: dMem[mem_addr >> 2][7:0] <= rdReg2[7:0];
-                        2'b01: dMem[mem_addr >> 2][15:8] <= rdReg2[7:0];
-                        2'b10: dMem[mem_addr >> 2][23:16] <= rdReg2[7:0];
-                        2'b11: dMem[mem_addr >> 2][31:24] <= rdReg2[7:0];
-                    endcase
-                end
-                3'h1: begin
-                    if (mem_addr[1])
-                        dMem[mem_addr >> 2][31:16] <= rdReg2[15:0];
-                    else
-                        dMem[mem_addr >> 2][15:0] <= rdReg2[15:0];
-                end
-                3'h2: dMem[mem_addr >> 2]       <= rdReg2;
-            endcase
+        if (MemWrite) begin
+            if (mem_addr == GPIO_OUT_ADDR)
+                gpio_out <= rdReg2;
+            else if (mem_addr == GPIO_DIR_ADDR)
+                gpio_dir <= rdReg2;
+            else
+                case (instruction[14:12])
+                    3'h0: begin
+                        case (mem_addr[1:0])
+                            2'b00: dMem[mem_addr >> 2][7:0] <= rdReg2[7:0];
+                            2'b01: dMem[mem_addr >> 2][15:8] <= rdReg2[7:0];
+                            2'b10: dMem[mem_addr >> 2][23:16] <= rdReg2[7:0];
+                            2'b11: dMem[mem_addr >> 2][31:24] <= rdReg2[7:0];
+                        endcase
+                    end
+                    3'h1: begin
+                        if (mem_addr[1])
+                            dMem[mem_addr >> 2][31:16] <= rdReg2[15:0];
+                        else
+                            dMem[mem_addr >> 2][15:0] <= rdReg2[15:0];
+                    end
+                    3'h2: dMem[mem_addr >> 2]       <= rdReg2;
+                endcase
+        end
     end
 
-    assign rdMem = (MemRead) ? dMem[mem_addr >> 2] : 32'b0;
-
+    wire is_gpio_out = (mem_addr == GPIO_OUT_ADDR);
+    wire is_gpio_in  = (mem_addr == GPIO_IN_ADDR);
+    wire is_gpio_dir = (mem_addr == GPIO_DIR_ADDR);
+    wire is_gpio     = is_gpio_out | is_gpio_in | is_gpio_in;
+    assign rdMem = !MemRead    ? 32'b0 :
+               is_gpio_in  ? gpio_in :
+               is_gpio_out ? gpio_out :
+               is_gpio_dir ? gpio_dir :
+                             dMem[mem_addr >> 2];
 
     always @* begin
         case (type)
@@ -342,5 +361,5 @@ module cpu (
         endcase
     end
 
-    assign out = pc[28];
+    //assign out = regs[10][25:22];
 endmodule
