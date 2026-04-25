@@ -3,9 +3,9 @@ module cpu (
     input wire reset,
     output wire [3:0] out,
     output reg illegal_instr,
-    input wire [7:0] gpio_in,
-    output reg [7:0] gpio_out,
-    output reg [7:0] gpio_dir
+    input wire [15:0] gpio_in,
+    output reg [15:0] gpio_out,
+    output reg [15:0] gpio_dir
 );
 
     localparam GPIO_OUT_ADDR = 32'hF000_0000;

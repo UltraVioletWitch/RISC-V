@@ -3,3 +3,12 @@ verilog/main.bit
 verilog/.Xil/
 verilog/utilization.rpt
 verilog/timing_summary.rpt
+verilog/util.txt
+verilog/io.txt
+verilog/timing.txt
+verilog/method.txt
+
+c/main.o
+c/program.bin
+c/program.elf
+c/program.hex
