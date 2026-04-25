@@ -12,8 +12,11 @@ verilog/main.mcs
 verilog/main.bin
 verilog/main.prm
 
-
 c/main.o
 c/program.bin
 c/program.elf
 c/program.hex
+
+riscv-arch-test/
+
+ice/

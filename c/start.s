@@ -2,7 +2,7 @@
 .global _start
 
 _start:
-    li sp, 0x1000
+    li sp, 0x4000
     call main
 hang:
     j hang

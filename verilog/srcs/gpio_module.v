@@ -1,4 +1,4 @@
-module gpio (
+module gpio_module (
     input wire [15:0] gpio_in,
     input wire [15:0] gpio_out,
     input wire [15:0] gpio_dir,
@@ -16,4 +16,14 @@ module gpio (
             );
         end
     endgenerate
+endmodule
+
+module IOBUF (
+    input wire O,  // Output signal
+    inout wire IO, // Bidirectional signal (inout)
+    input wire I,  // Input signal
+    input wire T   // Tri-state control signal
+);
+    assign IO = T ? 1'bz : I;  // If T is high, drive high impedance, otherwise drive input I
+    assign O = IO;             // Output is driven by IO
 endmodule

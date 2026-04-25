@@ -37,8 +37,5 @@ write_checkpoint -force test.dcp
 puts "Writing bitstream..."
 write_bitstream -force "main.bit"
 
-# see if gpio_dir flops even exist after implementation
-get_cells -hierarchical -filter {NAME =~ *gpio_dir*}
-
 puts "Done!"
 exit

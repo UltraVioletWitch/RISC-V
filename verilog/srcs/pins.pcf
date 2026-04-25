@@ -1,0 +1,35 @@
+# TinyFPGA BX Constraints File
+# ICE40LP8K-CM81
+
+# Clock (16 MHz)
+set_io clk B2 -pullup no
+
+# LED (User LED)
+set_io led A2 -pullup no
+
+# SPI Flash (For configuring the FPGA)
+set_io spi_cs  F1 -pullup yes
+set_io spi_sck G1 -pullup yes
+set_io spi_io0 C1 -pullup yes
+set_io spi_io1 E1 -pullup yes
+set_io spi_io2 D1 -pullup yes
+set_io spi_io3 D2 -pullup yes
+
+# User IO Pins (Example mapping)
+set_io gpio[0]  A1
+set_io gpio[1]  B1
+set_io gpio[2]  B1
+set_io gpio[3]  B1
+set_io gpio[4]  B1
+set_io gpio[5]  B1
+set_io gpio[6]  B1
+set_io gpio[7]  B1
+set_io gpio[8]  B1
+set_io gpio[9]  B1
+set_io gpio[10]  B1
+set_io gpio[11]  B1
+set_io gpio[12]  B1
+set_io gpio[13]  B1
+set_io gpio[14]  B1
+set_io gpio[15]  B1
+
