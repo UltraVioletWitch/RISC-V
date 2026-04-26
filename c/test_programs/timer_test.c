@@ -4,9 +4,6 @@
 #define GPIO_IN    (*(volatile uint32_t *)0xF0000004)
 #define GPIO_DIR   (*(volatile uint32_t *)0xF0000008)
 
-#define UART_TX  (*(volatile uint32_t *)0xF0000100)
-#define UART_RS (*(volatile uint32_t *)0xF0000104)
-
 #define MTIME_H    (*(volatile uint32_t *)0xFFFF0000)
 #define MTIME_L    (*(volatile uint32_t *)0xFFFF0004)
 #define MTIMECMP_H (*(volatile uint32_t *)0xFFFF0008)
@@ -17,9 +14,12 @@
 #define read_csr(reg) ({ uint32_t val; asm volatile("csrr %0, " #reg : "=r"(val)); val; })
 
 // 12MHz clock - 1 second interval
-#define TIMER_INTERVAL 6000000ULL
+#define TIMER_INTERVAL 3000000ULL
 
+static volatile uint32_t led_state = 0;
+static volatile uint32_t tick_count = 0;
 static volatile int timerFlag = 0;
+
 void set_timer(uint64_t interval) {
     uint32_t lo, hi;
     do {
@@ -35,45 +35,6 @@ void set_timer(uint64_t interval) {
     MTIMECMP_H = (uint32_t)(next >> 32);
 }
 
-void uart_putc(char c) {
-    while ((UART_RS >> 0) & 1);
-    UART_TX = c;
-    while (!((UART_RS >> 1) & 1));
-}
-
-void uart_puts(const char *s) {
-    while (*s)
-        uart_putc(*s++);
-}
-
-// minimal integer print
-void uart_puti(uint32_t n) {
-    if (n == 0) { uart_putc('0'); return; }
-    char buf[10];
-    int i = 0;
-    while (n > 0) {
-        uint32_t q = 0;
-        uint32_t r = n;
-        uint32_t d = 10;
-        while (r >= d) {
-            r -= d;
-            q++;
-        }
-        buf[i++] = '0' + r;
-        n = q;
-    }
-    while (i--)
-        uart_putc(buf[i]);
-}
-
-void uart_puthex(uint32_t n) {
-    uart_puts("0x");
-    for (int i = 28; i >= 0; i -= 4) {
-        uint8_t nibble = (n >> i) & 0xF;
-        uart_putc(nibble < 10 ? '0' + nibble : 'a' + nibble - 10);
-    }
-}
-
 void __attribute__((interrupt("machine"))) trap_handler() {
     uint32_t cause = read_csr(mcause);
     //GPIO_OUT = 0x11;
@@ -82,31 +43,35 @@ void __attribute__((interrupt("machine"))) trap_handler() {
         timerFlag = 1;
         // reschedule
         set_timer(TIMER_INTERVAL);
+    } else if (cause == 0x8000000B) {
+        // external interrupt - flash all LEDs twice
+        uint32_t saved = led_state;
+        for (int i = 0; i < 2; i++) {
+            GPIO_OUT = 0xFF;
+            for (volatile int d = 0; d < 50000; d++);
+            GPIO_OUT = 0x00;
+            for (volatile int d = 0; d < 50000; d++);
+        }
+        GPIO_OUT = saved;
     }
 }
 
 int main() {
     GPIO_DIR = 0x3FF;
-    GPIO_OUT = 0x55;    // startup pattern so we know code is running
+    //GPIO_OUT = 0x55;    // startup pattern so we know code is running
 
-    volatile int tick_count = 0;
-    volatile uint32_t led_state = 0;
-
-    uart_puts("UART online!\r\n");
-    uart_puts("tick: ");
-    uart_puti(tick_count);
-    uart_puts("\r\n");
-
+    // enable timer and external interrupts
     set_csr(mie, (1 << 7));
+
+    // arm the first timer interrupt
     set_timer(TIMER_INTERVAL);
+
+    // enable global interrupts
     set_csr(mstatus, (1 << 3));
 
     while (1) {
         if (timerFlag) {
             tick_count++;
-            uart_puts("tick: ");
-            uart_puti(tick_count);
-            uart_puts("\r\n");
 
             led_state = (led_state << 1) | (led_state >> 9);
             led_state &= 0x3FF;

@@ -5,7 +5,9 @@ module rv32 (
     input wire [15:0] gpio_in,
     output reg [15:0] gpio_out,
     output reg [15:0] gpio_dir,
-    input wire ext_irq
+    input wire ext_irq,
+    output wire uart_tx,
+    input wire uart_rx
 );
 
     localparam CODE_BASE = 32'h0000_0000;
@@ -17,12 +19,15 @@ module rv32 (
     localparam GPIO_IN_ADDR = 32'hF000_0004;
     localparam GPIO_DIR_ADDR = 32'hF000_0008;
 
+    localparam UART_TX_ADDR = 32'hF000_0100;
+    localparam UART_SR_ADDR = 32'hF000_0104;
+
     localparam TIMER0_MTIME_H = 32'hFFFF_0000;
     localparam TIMER0_MTIME_L = 32'hFFFF_0004;
     localparam TIMER0_MTIMECMP_H = 32'hFFFF_0008;
     localparam TIMER0_MTIMECMP_L = 32'hFFFF_000C;
 
-    // localparam UART_BASE = 32'hFF00_0000;
+
 
     // machine mode CSRs
     reg [31:0] mstatus;
@@ -61,6 +66,8 @@ module rv32 (
 
     wire timer_irq = (timer0_mtime >= timer0_mtimecmp) ? 1'b1 : 1'b0; // to be implemented later
 
+
+
     assign mip = {20'b0, ext_irq, 3'b0, timer_irq, 3'b0, 1'b0, 3'b0};
 
     // type definitions
@@ -98,6 +105,32 @@ module rv32 (
     reg [31:0] alu, alu_in1, alu_in2;
     wire [31:0] mem_addr = alu;
 
+    wire baud_tick, baud_tick_16x;
+    wire uart_tx_valid;
+    wire [7:0] uart_tx_data;
+    wire uart_tx_active, uart_tx_done;
+
+    assign uart_tx_valid = MemWrite && (mem_addr == UART_TX_ADDR);
+    assign uart_tx_data  = rdReg2[7:0];
+
+    wire is_uart_sr = (mem_addr == UART_SR_ADDR);
+
+    baud_gen baud0 (
+        .clk           (clk),
+        .reset         (reset),
+        .baud_tick     (baud_tick),
+        .baud_tick_16x (baud_tick_16x)
+    );
+
+    uart_tx tx0 (
+        .i_Clock                (clk),
+        .i_Tx_DV      (uart_tx_valid),
+        .i_Tx_Byte     (uart_tx_data),
+        .o_Tx_Active (uart_tx_active),
+        .o_Tx_Serial        (uart_tx),
+        .o_Tx_Done      (uart_tx_done)
+    );
+
     wire is_timer0_mtime_h = (mem_addr == TIMER0_MTIME_H);
     wire is_timer0_mtime_l = (mem_addr == TIMER0_MTIME_L);
     wire is_timer0_mtimecmp_h = (mem_addr == TIMER0_MTIMECMP_H);
@@ -107,8 +140,8 @@ module rv32 (
     wire in_code_region = (mem_addr >= CODE_BASE && mem_addr <= CODE_TOP);
     wire in_data_region = (mem_addr >= DATA_BASE && mem_addr <= DATA_TOP);
     wire in_gpio        = (mem_addr == GPIO_OUT_ADDR || mem_addr == GPIO_DIR_ADDR);
-    // wire in_uart        = (mem_addr == UART_BASE);
-    wire in_timer       = (mem_addr[31:4] == 28'hFFFF000);
+    //wire in_uart        = (mem_addr == UART_TX_ADDR || mem_addr == UART_RDY_ADDR);
+    wire in_timer       = (mem_addr >= TIMER0_MTIME_H && mem_addr <= TIMER0_MTIMECMP_L);
 
     // pc assignment with reset
     always @(posedge clk or posedge reset) begin
@@ -337,6 +370,7 @@ module rv32 (
                is_timer0_mtime_l    ? timer0_mtime[31:0] :
                is_timer0_mtimecmp_h ? timer0_mtimecmp[63:32] :
                is_timer0_mtimecmp_l ? timer0_mtimecmp[31:0] :
+               is_uart_sr           ? {30'b0, uart_tx_done, uart_tx_active} :
                                       mem[mem_addr >> 2];
 
     always @* begin

@@ -9,6 +9,7 @@ verilog/test.dcp
 verilog/main.mcs
 verilog/main.bin
 verilog/main.prm
+verilog/program.hex
 verilog/tight_setup_hold_pins.txt
 
 assembly/program.bin
