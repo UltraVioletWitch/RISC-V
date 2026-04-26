@@ -4,7 +4,8 @@ module rv32 (
     output reg illegal_instr,
     input wire [15:0] gpio_in,
     output reg [15:0] gpio_out,
-    output reg [15:0] gpio_dir
+    output reg [15:0] gpio_dir,
+    input wire ext_irq
 );
 
     localparam CODE_BASE = 32'h0000_0000;
@@ -16,6 +17,11 @@ module rv32 (
     localparam GPIO_IN_ADDR = 32'hF000_0004;
     localparam GPIO_DIR_ADDR = 32'hF000_0008;
 
+    localparam TIMER0_MTIME_H = 32'hFFFF_0000;
+    localparam TIMER0_MTIME_L = 32'hFFFF_0004;
+    localparam TIMER0_MTIMECMP_H = 32'hFFFF_0008;
+    localparam TIMER0_MTIMECMP_L = 32'hFFFF_000C;
+
     // localparam UART_BASE = 32'hFF00_0000;
 
     // machine mode CSRs
@@ -25,7 +31,7 @@ module rv32 (
     reg [31:0] mepc;
     reg [31:0] mcause;
     reg [31:0] mie;
-    reg [31:0] mip;
+    wire [31:0] mip;
     reg [31:0] misa;
     reg [31:0] mhartid;
     reg [31:0] mvendorid;
@@ -41,7 +47,6 @@ module rv32 (
         mepc       = 32'b0;
         mcause     = 32'b0;
         mie        = 32'b0;
-        mip        = 32'b0;
         misa       = 32'h40000100;
         mhartid    = 32'b0;
         mvendorid  = 32'b0;
@@ -50,6 +55,14 @@ module rv32 (
         mtval      = 32'b0;
         mcounteren = 32'b0;
     end
+
+    // timer regs
+    reg [63:0] timer0_mtime, timer0_mtimecmp;
+
+    wire timer_irq = (timer0_mtime >= timer0_mtimecmp) ? 1'b1 : 1'b0; // to be implemented later
+
+    assign mip = {20'b0, ext_irq, 3'b0, timer_irq, 3'b0, 1'b0, 3'b0};
+
     // type definitions
     localparam R_type = 3'b000, I_type = 3'b001, S_type = 3'b010, B_type = 3'b011, U_type = 3'b100, J_type = 3'b101;
 
@@ -73,6 +86,8 @@ module rv32 (
     reg PCSrc;
     reg csr_write;
 
+    wire interrupt_pending = mstatus[3] && |(mie & mip);
+
     reg [31:0] immGen;
 
     wire [4:0] opcode;
@@ -83,10 +98,17 @@ module rv32 (
     reg [31:0] alu, alu_in1, alu_in2;
     wire [31:0] mem_addr = alu;
 
+    wire is_timer0_mtime_h = (mem_addr == TIMER0_MTIME_H);
+    wire is_timer0_mtime_l = (mem_addr == TIMER0_MTIME_L);
+    wire is_timer0_mtimecmp_h = (mem_addr == TIMER0_MTIMECMP_H);
+    wire is_timer0_mtimecmp_l = (mem_addr == TIMER0_MTIMECMP_L);
+
+
     wire in_code_region = (mem_addr >= CODE_BASE && mem_addr <= CODE_TOP);
     wire in_data_region = (mem_addr >= DATA_BASE && mem_addr <= DATA_TOP);
     wire in_gpio        = (mem_addr == GPIO_OUT_ADDR || mem_addr == GPIO_DIR_ADDR);
     // wire in_uart        = (mem_addr == UART_BASE);
+    wire in_timer       = (mem_addr[31:4] == 28'hFFFF000);
 
     // pc assignment with reset
     always @(posedge clk or posedge reset) begin
@@ -105,6 +127,21 @@ module rv32 (
 
     // instruction registers declaration
     wire [31:0] rdReg1, rdReg2, wrReg;
+
+    always @(posedge clk or posedge reset) begin
+        if (reset) begin
+            timer0_mtimecmp <= 64'hFFFFFFFFFFFFFFFF;
+        end else if (MemWrite && in_timer) begin
+            if (mem_addr == TIMER0_MTIMECMP_H)
+                timer0_mtimecmp[63:32] <= rdReg2;
+            else if (mem_addr == TIMER0_MTIMECMP_L)
+                timer0_mtimecmp[31:0] <= rdReg2;
+        end
+        if (reset) begin
+            timer0_mtime <= 64'b0;
+        end else
+            timer0_mtime <= timer0_mtime + 1;
+    end
 
     // read from registers
     assign rdReg1 = regs[instruction[19:15]];
@@ -195,17 +232,29 @@ module rv32 (
     end
 
     always @(posedge clk) begin
-        if (opcode == SYSTEM && instruction[14:12] == 3'h0) begin
+        if (interrupt_pending) begin
+            mepc           <= pc;
+            if (mie[11] & mip[11]) mcause <= 32'h8000000B;
+            else if (mie[7] & mip[7]) mcause <= 32'h80000007;
+            else mcause <= 32'h80000003;
+            mstatus[7]     <= mstatus[3];    // save MIE to MPIE
+            mstatus[3]     <= 1'b0;          // clear MIE
+            mstatus[12:11] <= 2'b11;         // MPP = M-mode
+        end else if (opcode == SYSTEM && instruction[14:12] == 3'h0) begin
             case (instruction[31:20])
                 12'h000: begin
                     mepc  <= pc;
                     mcause <= 32'd11;
+                    mstatus[7] <= mstatus[3];
                     mstatus[3] <= 1'b0;
+                    mstatus[12:11] <= 2'b11;
                 end
                 12'h001: begin
                     mepc <= pc;
                     mcause <= 32'd3;
+                    mstatus[7] <= mstatus[3];
                     mstatus[3] <= 1'b0;
+                    mstatus[12:11] <= 2'b11;
                 end
                 12'h302: begin 
                     mstatus[3] <= mstatus[7];
@@ -218,7 +267,7 @@ module rv32 (
                 12'h304: mie      <= csr_wdata;
                 12'h305: mtvec    <= csr_wdata;
                 12'h340: mscratch <= csr_wdata;
-                12'h341: mepc     <= csr_wdata;
+                12'h341: mepc     <= csr_wdata & ~32'h3;
                 12'h342: mcause   <= csr_wdata;
             endcase
         end
@@ -279,12 +328,16 @@ module rv32 (
     wire is_gpio_out = (mem_addr == GPIO_OUT_ADDR);
     wire is_gpio_in  = (mem_addr == GPIO_IN_ADDR);
     wire is_gpio_dir = (mem_addr == GPIO_DIR_ADDR);
-    wire is_gpio     = is_gpio_out | is_gpio_in | is_gpio_dir;
-    assign rdMem = !MemRead    ? 32'b0 :
-               is_gpio_in  ? gpio_in :
-               is_gpio_out ? gpio_out :
-               is_gpio_dir ? gpio_dir :
-                             mem[mem_addr >> 2];
+
+    assign rdMem = !MemRead         ? 32'b0 :
+               is_gpio_in           ? gpio_in :
+               is_gpio_out          ? gpio_out :
+               is_gpio_dir          ? gpio_dir :
+               is_timer0_mtime_h    ? timer0_mtime[63:32] :
+               is_timer0_mtime_l    ? timer0_mtime[31:0] :
+               is_timer0_mtimecmp_h ? timer0_mtimecmp[63:32] :
+               is_timer0_mtimecmp_l ? timer0_mtimecmp[31:0] :
+                                      mem[mem_addr >> 2];
 
     always @* begin
         case (type)
@@ -318,6 +371,25 @@ module rv32 (
     wire ltu = (rdReg1 < rdReg2);
 
     always @* begin
+        if (interrupt_pending) begin
+            pc_next = {mtvec[31:2], 2'b00};
+        end else if ((opcode == BRANCH && PCSrc) || opcode == JAL) begin
+            pc_next = pc + immGen;
+        end else if (opcode == JALR) begin
+            pc_next = (rdReg1 + immGen) & ~32'b1;
+        end else if (opcode == SYSTEM && instruction[14:12] == 3'h0) begin
+            case (instruction[31:20])
+                12'h302: pc_next = {mepc[31:2], 2'b00};
+                12'h105: pc_next = pc +4;
+                default: pc_next = {mtvec[31:2], 2'b00};
+            endcase
+        end else begin
+            pc_next = pc + 4;
+        end
+    end
+
+
+    always @* begin
         RegWrite = 0;
         ALUSrc = 0;
         MemRead = 0;
@@ -325,7 +397,6 @@ module rv32 (
         ALUCtrl = ADD;
         toReg = 3'b000;
         PCSrc = 1'b0;
-        pc_next = pc + 4;
         illegal_instr = 0;
         csr_write = 0;
 
@@ -396,22 +467,15 @@ module rv32 (
                     3'h7: PCSrc = ~ltu;
                     default: PCSrc = 1'b0;
                 endcase
-
-                if (PCSrc)
-                    pc_next = pc + immGen;
-                else
-                    pc_next = pc + 4;
             end
             JAL: begin
                 RegWrite = 1;
                 toReg = 3'b001;
-                pc_next = pc + immGen;
             end
             JALR: begin
                 RegWrite = 1;
                 ALUSrc = 1;
                 toReg = 3'b001;
-                pc_next = (rdReg1 + immGen) & ~32'b1;
             end
             LUI: begin
                 RegWrite = 1;
@@ -454,12 +518,11 @@ module rv32 (
                         toReg = 3'b101;
                     end
                     3'h0: begin
-                        case (instruction[31:20])
-                            12'h302: pc_next = mepc;
-                            default: pc_next = mtvec;
-                        endcase
                     end
                 endcase
+            end
+            MISC_MEM: begin
+                // nop
             end
             default: begin
                 RegWrite = 0;
