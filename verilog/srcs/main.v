@@ -12,7 +12,7 @@ module main (
         .illegal_instr(),
         .gpio_in(gpio_in),
         .gpio_out(gpio_out),
-        .gpio_dir(gpio_dir),
+        .gpio_dir(gpio_dir)
     );
 
     gpio_module gpio_mod1 (

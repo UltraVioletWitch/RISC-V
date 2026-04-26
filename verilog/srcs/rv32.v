@@ -4,7 +4,7 @@ module rv32 (
     output reg illegal_instr,
     input wire [15:0] gpio_in,
     output reg [15:0] gpio_out,
-    output reg [15:0] gpio_dir,
+    output reg [15:0] gpio_dir
 );
 
     localparam CODE_BASE = 32'h0000_0000;
@@ -16,8 +16,40 @@ module rv32 (
     localparam GPIO_IN_ADDR = 32'hF000_0004;
     localparam GPIO_DIR_ADDR = 32'hF000_0008;
 
-    localparam UART_BASE = 32'hFF00_0000;
+    // localparam UART_BASE = 32'hFF00_0000;
 
+    // machine mode CSRs
+    reg [31:0] mstatus;
+    reg [31:0] mtvec;
+    reg [31:0] mscratch;
+    reg [31:0] mepc;
+    reg [31:0] mcause;
+    reg [31:0] mie;
+    reg [31:0] mip;
+    reg [31:0] misa;
+    reg [31:0] mhartid;
+    reg [31:0] mvendorid;
+    reg [31:0] marchid;
+    reg [31:0] mimpid;
+    reg [31:0] mtval;
+    reg [31:0] mcounteren;
+
+    initial begin
+        mstatus    = 32'b0;
+        mtvec      = 32'b0;
+        mscratch   = 32'b0;
+        mepc       = 32'b0;
+        mcause     = 32'b0;
+        mie        = 32'b0;
+        mip        = 32'b0;
+        misa       = 32'h40000100;
+        mhartid    = 32'b0;
+        mvendorid  = 32'b0;
+        marchid    = 32'b0;
+        mimpid     = 32'b0;
+        mtval      = 32'b0;
+        mcounteren = 32'b0;
+    end
     // type definitions
     localparam R_type = 3'b000, I_type = 3'b001, S_type = 3'b010, B_type = 3'b011, U_type = 3'b100, J_type = 3'b101;
 
@@ -39,6 +71,7 @@ module rv32 (
     reg [3:0] ALUCtrl;
     reg [2:0] toReg;
     reg PCSrc;
+    reg csr_write;
 
     reg [31:0] immGen;
 
@@ -53,7 +86,7 @@ module rv32 (
     wire in_code_region = (mem_addr >= CODE_BASE && mem_addr <= CODE_TOP);
     wire in_data_region = (mem_addr >= DATA_BASE && mem_addr <= DATA_TOP);
     wire in_gpio        = (mem_addr == GPIO_OUT_ADDR || mem_addr == GPIO_DIR_ADDR);
-    wire in_uart        = (mem_addr == UART_BASE);
+    // wire in_uart        = (mem_addr == UART_BASE);
 
     // pc assignment with reset
     always @(posedge clk or posedge reset) begin
@@ -77,12 +110,37 @@ module rv32 (
     assign rdReg1 = regs[instruction[19:15]];
     assign rdReg2 = regs[instruction[24:20]];
 
+    reg [31:0] csr_rdata;
+
+    always @* begin
+        case (instruction[31:20])
+            12'h300: csr_rdata = mstatus;
+            12'h305: csr_rdata = mtvec;
+            12'h340: csr_rdata = mscratch;
+            12'h341: csr_rdata = mepc;
+            12'h342: csr_rdata = mcause;
+            12'h304: csr_rdata = mie;
+            12'h344: csr_rdata = mip;
+            12'h301: csr_rdata = misa;
+            12'hF14: csr_rdata = mhartid;
+            12'hF11: csr_rdata = mvendorid;
+            12'hF12: csr_rdata = marchid;
+            12'hF13: csr_rdata = mimpid;
+            12'h343: csr_rdata = mtval;
+            12'h306: csr_rdata = mcounteren;
+            default: csr_rdata = 32'b0;
+        endcase
+    end
+
     // write to registers
     assign wrReg = (toReg == 3'b000) ? alu :
                    (toReg == 3'b001) ? pc + 4 :
                    (toReg == 3'b010) ? rdMem :
                    (toReg == 3'b011) ? pc + immGen :
-                                       immGen;
+                   (toReg == 3'b100) ? immGen :
+                   (toReg == 3'b101) ? csr_rdata :
+                                       32'b0;
+
     always @(posedge clk) begin
         if (RegWrite && instruction[11:7] != 5'b0) begin
             if (opcode == LOAD)
@@ -119,6 +177,50 @@ module rv32 (
                 endcase
             else
                 regs[instruction[11:7]] <= wrReg;
+        end
+    end
+
+    reg [31:0] csr_wdata;
+
+    always @* begin
+        case (instruction[14:12])
+            3'h1: csr_wdata = rdReg1;
+            3'h2: csr_wdata = rdReg1 | csr_rdata;
+            3'h3: csr_wdata = ~rdReg1 & csr_rdata;
+            3'h5: csr_wdata = {27'b0, instruction[19:15]};
+            3'h6: csr_wdata = {27'b0, instruction[19:15]} | csr_rdata;
+            3'h7: csr_wdata = ~{27'b0, instruction[19:15]} & csr_rdata;
+            default: csr_wdata = 32'b0;
+        endcase
+    end
+
+    always @(posedge clk) begin
+        if (opcode == SYSTEM && instruction[14:12] == 3'h0) begin
+            case (instruction[31:20])
+                12'h000: begin
+                    mepc  <= pc;
+                    mcause <= 32'd11;
+                    mstatus[3] <= 1'b0;
+                end
+                12'h001: begin
+                    mepc <= pc;
+                    mcause <= 32'd3;
+                    mstatus[3] <= 1'b0;
+                end
+                12'h302: begin 
+                    mstatus[3] <= mstatus[7];
+                    mstatus[7] <= 1'b1;
+                end
+            endcase
+        end else if (csr_write) begin
+            case (instruction[31:20])
+                12'h300: mstatus  <= csr_wdata;
+                12'h304: mie      <= csr_wdata;
+                12'h305: mtvec    <= csr_wdata;
+                12'h340: mscratch <= csr_wdata;
+                12'h341: mepc     <= csr_wdata;
+                12'h342: mcause   <= csr_wdata;
+            endcase
         end
     end
 
@@ -225,14 +327,11 @@ module rv32 (
         PCSrc = 1'b0;
         pc_next = pc + 4;
         illegal_instr = 0;
+        csr_write = 0;
 
         case (opcode)
             OP: begin
                 RegWrite = 1;
-                ALUSrc = 0;
-                MemRead = 0;
-                MemWrite = 0;
-                toReg = 3'b000;
 
                 case (instruction[31:25])
                     7'h00: begin
@@ -260,9 +359,6 @@ module rv32 (
             OP_IMM: begin
                 RegWrite = 1;
                 ALUSrc = 1;
-                MemRead = 0;
-                MemWrite = 0;
-                toReg = 3'b000;
 
                 case (instruction[14:12])
                     3'h0: ALUCtrl = ADD;
@@ -284,25 +380,13 @@ module rv32 (
                 RegWrite = 1;
                 ALUSrc = 1;
                 MemRead = 1;
-                MemWrite = 0;
-                ALUCtrl = ADD;
                 toReg = 3'b010;
             end
             STORE: begin
-                RegWrite = 0;
                 ALUSrc = 1;
-                MemRead = 0;
                 MemWrite = 1;
-                ALUCtrl = ADD;
-                toReg = 3'b000;
             end
             BRANCH: begin
-                RegWrite = 0;
-                ALUSrc = 0;
-                MemRead = 0;
-                MemWrite = 0;
-                toReg = 3'b000;
-
                 case (instruction[14:12])
                     3'h0: PCSrc = eq;
                     3'h1: PCSrc = ~eq;
@@ -320,45 +404,62 @@ module rv32 (
             end
             JAL: begin
                 RegWrite = 1;
-                ALUSrc = 0;
-                MemRead = 0;
-                MemWrite = 0;
-                ALUCtrl = ADD;
                 toReg = 3'b001;
                 pc_next = pc + immGen;
             end
             JALR: begin
                 RegWrite = 1;
                 ALUSrc = 1;
-                MemRead = 0;
-                MemWrite = 0;
-                ALUCtrl = ADD;
                 toReg = 3'b001;
                 pc_next = (rdReg1 + immGen) & ~32'b1;
             end
             LUI: begin
                 RegWrite = 1;
-                ALUSrc = 0;
-                MemRead = 0;
-                MemWrite = 0;
-                ALUCtrl = ADD;
                 toReg = 3'b100;
             end
             AUIPC: begin
                 RegWrite = 1;
-                ALUSrc = 0;
-                MemRead = 0;
-                MemWrite = 0;
-                ALUCtrl = ADD;
                 toReg = 3'b011;
             end
             SYSTEM: begin
-                RegWrite = 0;
-                ALUSrc = 0;
-                MemRead = 0;
-                MemWrite = 0;
-                ALUCtrl = ADD;
-                toReg = 3'b000;
+                case (instruction[14:12])
+                    3'h1: begin
+                        RegWrite = 1'b1;
+                        csr_write = 1'b1;
+                        toReg  = (instruction[11:7] == 5'b0)  ? 3'b000 : 3'b101;
+                    end
+                    3'h2: begin
+                        RegWrite = 1'b1;
+                        csr_write = (instruction[19:15] == 5'b0) ? 1'b0 : 1'b1;
+                        toReg = 3'b101;
+                    end
+                    3'h3: begin
+                        RegWrite = 1'b1;
+                        csr_write = (instruction[19:15] == 5'b0) ? 1'b0 : 1'b1;
+                        toReg = 3'b101;
+                    end
+                    3'h5: begin
+                        RegWrite = 1'b1;
+                        csr_write = 1'b1;
+                        toReg  = (instruction[11:7] == 5'b0)  ? 3'b000 : 3'b101;
+                    end
+                    3'h6: begin
+                        RegWrite = 1'b1;
+                        csr_write = (instruction[19:15] == 5'b0) ? 1'b0 : 1'b1;
+                        toReg = 3'b101;
+                    end
+                    3'h7: begin
+                        RegWrite = 1'b1;
+                        csr_write = (instruction[19:15] == 5'b0) ? 1'b0 : 1'b1;
+                        toReg = 3'b101;
+                    end
+                    3'h0: begin
+                        case (instruction[31:20])
+                            12'h302: pc_next = mepc;
+                            default: pc_next = mtvec;
+                        endcase
+                    end
+                endcase
             end
             default: begin
                 RegWrite = 0;

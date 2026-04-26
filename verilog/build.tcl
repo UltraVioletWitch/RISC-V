@@ -1,4 +1,4 @@
-read_verilog { "./srcs/cpu.v" "./srcs/main.v" "./srcs/gpio.v" }
+read_verilog { "./srcs/rv32.v" "./srcs/main.v" "./srcs/gpio_module.v" }
 
 read_xdc "./srcs/Arty-S7-25-Master.xdc"
 

@@ -26,3 +26,5 @@ c/program.hex
 riscv-tests/
 
 ice/
+
+rust/

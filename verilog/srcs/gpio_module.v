@@ -18,6 +18,7 @@ module gpio_module (
     endgenerate
 endmodule
 
+/*
 module IOBUF (
     input wire O,  // Output signal
     inout wire IO, // Bidirectional signal (inout)
@@ -26,4 +27,6 @@ module IOBUF (
 );
     assign IO = T ? 1'bz : I;  // If T is high, drive high impedance, otherwise drive input I
     assign O = IO;             // Output is driven by IO
+
 endmodule
+*/

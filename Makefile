@@ -1,4 +1,4 @@
-all: build upload
+all: flash
 
 build:
 	@$(MAKE) -C ./verilog/ build
