@@ -1,4 +1,4 @@
-read_verilog { "./srcs/rv32.v" "./srcs/main.v" "./srcs/gpio_module.v" "./srcs/baud_gen.v" "./srcs/uart_tx.v"}
+read_verilog { "./srcs/rv32.v" "./srcs/main.v" "./srcs/gpio_module.v" "./srcs/baud_gen.v" "./srcs/uart_tx.v" "./srcs/uart_rx.v" }
 
 read_xdc "./srcs/Arty-S7-25-Master.xdc"
 

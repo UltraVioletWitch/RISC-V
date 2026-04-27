@@ -5,7 +5,12 @@
 #define GPIO_DIR   (*(volatile uint32_t *)0xF0000008)
 
 #define UART_TX  (*(volatile uint32_t *)0xF0000100)
-#define UART_RS (*(volatile uint32_t *)0xF0000104)
+#define UART_RX  (*(volatile uint32_t *)0xF0000104)
+#define UART_SR (*(volatile uint32_t *)0xF0000108)
+
+#define UART_ACTIVE (1 << 0)
+#define UART_TX_DONE (1 << 1)
+#define UART_RX_READY (1 << 2)
 
 #define MTIME_H    (*(volatile uint32_t *)0xFFFF0000)
 #define MTIME_L    (*(volatile uint32_t *)0xFFFF0004)
@@ -14,6 +19,7 @@
 
 #define write_csr(reg, val) asm volatile("csrw " #reg ", %0" :: "r"(val))
 #define set_csr(reg, val)   asm volatile("csrs " #reg ", %0" :: "r"(val))
+#define clear_csr(reg, val)   asm volatile("csrc " #reg ", %0" :: "r"(val))
 #define read_csr(reg) ({ uint32_t val; asm volatile("csrr %0, " #reg : "=r"(val)); val; })
 
 // 12MHz clock - 1 second interval
@@ -36,9 +42,10 @@ void set_timer(uint64_t interval) {
 }
 
 void uart_putc(char c) {
-    while ((UART_RS >> 0) & 1);
+    while (UART_SR & UART_ACTIVE);
     UART_TX = c;
-    while (!((UART_RS >> 1) & 1));
+    while (!(UART_SR & UART_TX_DONE));
+    UART_SR = UART_TX_DONE;
 }
 
 void uart_puts(const char *s) {
@@ -74,6 +81,12 @@ void uart_puthex(uint32_t n) {
     }
 }
 
+void uart_rx_echo() {
+    char c = UART_RX;
+    UART_SR = UART_RX_READY;
+    uart_putc(c);
+}
+
 void __attribute__((interrupt("machine"))) trap_handler() {
     uint32_t cause = read_csr(mcause);
     //GPIO_OUT = 0x11;
@@ -87,26 +100,37 @@ void __attribute__((interrupt("machine"))) trap_handler() {
 
 int main() {
     GPIO_DIR = 0x3FF;
-    GPIO_OUT = 0x55;    // startup pattern so we know code is running
+    GPIO_OUT = 0x3FF;    // startup pattern so we know code is running
 
     volatile int tick_count = 0;
     volatile uint32_t led_state = 0;
 
     uart_puts("UART online!\r\n");
+    /*
     uart_puts("tick: ");
     uart_puti(tick_count);
     uart_puts("\r\n");
+    */
 
     set_csr(mie, (1 << 7));
     set_timer(TIMER_INTERVAL);
     set_csr(mstatus, (1 << 3));
 
     while (1) {
+
+        //GPIO_OUT = UART_SR & 0x3FF;
+
+        if (UART_SR & UART_RX_READY) {
+            uart_rx_echo();
+        }
+
         if (timerFlag) {
             tick_count++;
+            /*
             uart_puts("tick: ");
             uart_puti(tick_count);
             uart_puts("\r\n");
+            */
 
             led_state = (led_state << 1) | (led_state >> 9);
             led_state &= 0x3FF;

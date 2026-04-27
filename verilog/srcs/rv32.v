@@ -20,7 +20,8 @@ module rv32 (
     localparam GPIO_DIR_ADDR = 32'hF000_0008;
 
     localparam UART_TX_ADDR = 32'hF000_0100;
-    localparam UART_SR_ADDR = 32'hF000_0104;
+    localparam UART_RX_ADDR = 32'hF000_0104;
+    localparam UART_SR_ADDR = 32'hF000_0108;
 
     localparam TIMER0_MTIME_H = 32'hFFFF_0000;
     localparam TIMER0_MTIME_L = 32'hFFFF_0004;
@@ -52,7 +53,7 @@ module rv32 (
         mepc       = 32'b0;
         mcause     = 32'b0;
         mie        = 32'b0;
-        misa       = 32'h40000100;
+        misa       = 32'h40001100;
         mhartid    = 32'b0;
         mvendorid  = 32'b0;
         marchid    = 32'b0;
@@ -66,8 +67,6 @@ module rv32 (
 
     wire timer_irq = (timer0_mtime >= timer0_mtimecmp) ? 1'b1 : 1'b0; // to be implemented later
 
-
-
     assign mip = {20'b0, ext_irq, 3'b0, timer_irq, 3'b0, 1'b0, 3'b0};
 
     // type definitions
@@ -79,7 +78,7 @@ module rv32 (
                MADD = 5'b10000, MSUB = 5'b10001, NMSUB = 5'b10010, NMADD = 5'b10011, OP_FP = 5'b10100,
                BRANCH = 5'b11000, JALR = 5'b11001, JAL = 5'b11011, SYSTEM = 5'b11100;
 
-    localparam ADD = 4'b0000, SUB = 4'b0001, XOR = 4'b0010, OR = 4'b0011, AND = 4'b0100, SLL = 4'b0101, SRL = 4'b0110, SRA = 4'b0111, SLT = 4'b1000, SLTU = 4'b1001;
+    localparam ADD = 5'b00000, SUB = 5'b00001, XOR = 5'b00010, OR = 5'b00011, AND = 5'b00100, SLL = 5'b00101, SRL = 5'b00110, SRA = 5'b00111, SLT = 5'b01000, SLTU = 5'b01001, MUL = 5'b01010, MULH = 5'b01011, MULHU = 5'b01100, MULHSU = 5'b01101, DIV = 5'b01110, DIVU = 5'b01111, REM = 5'b10000, REMU = 5'b10001;
     // pc, instruction mem, and instruction declaration
     reg [31:0] pc, pc_next;
     reg [31:0] mem [4095:0];
@@ -88,7 +87,7 @@ module rv32 (
     wire [31:0] instruction;
 
     reg RegWrite, ALUSrc, MemRead, MemWrite;
-    reg [3:0] ALUCtrl;
+    reg [4:0] ALUCtrl;
     reg [2:0] toReg;
     reg PCSrc;
     reg csr_write;
@@ -105,31 +104,71 @@ module rv32 (
     reg [31:0] alu, alu_in1, alu_in2;
     wire [31:0] mem_addr = alu;
 
-    wire baud_tick, baud_tick_16x;
+    wire baud_tick_tx, baud_tick_rx;
     wire uart_tx_valid;
-    wire [7:0] uart_tx_data;
+    wire [7:0] uart_tx_data, uart_rx_data;
     wire uart_tx_active, uart_tx_done;
+    wire uart_rx_ready;
 
     assign uart_tx_valid = MemWrite && (mem_addr == UART_TX_ADDR);
     assign uart_tx_data  = rdReg2[7:0];
 
     wire is_uart_sr = (mem_addr == UART_SR_ADDR);
-
-    baud_gen baud0 (
-        .clk           (clk),
-        .reset         (reset),
-        .baud_tick     (baud_tick),
-        .baud_tick_16x (baud_tick_16x)
-    );
+    wire is_uart_rx = (mem_addr == UART_RX_ADDR);
 
     uart_tx tx0 (
-        .i_Clock                (clk),
-        .i_Tx_DV      (uart_tx_valid),
-        .i_Tx_Byte     (uart_tx_data),
-        .o_Tx_Active (uart_tx_active),
-        .o_Tx_Serial        (uart_tx),
-        .o_Tx_Done      (uart_tx_done)
+        .clk                (clk),
+        .reset     (reset),
+        .baud_tick (baud_tick_tx),
+        .tx_start      (uart_tx_valid),
+        .tx_data     (uart_tx_data),
+        .tx_busy (uart_tx_active),
+        .tx_line        (uart_tx),
+        .tx_done    (uart_tx_done)
     );
+
+    uart_rx rx0 (
+        .clk                   (clk),
+        .rst                 (reset),
+        .rx                (uart_rx),
+        .baud_tick_rx (baud_tick_rx),
+        .data_valid  (uart_rx_ready),
+        .data_out     (uart_rx_data)
+    );
+
+    baud_gen bgen0 (
+        .clk          (clk),
+        .rst          (reset),
+        .baud_tick_tx (baud_tick_tx),
+        .baud_tick_rx (baud_tick_rx)
+    );
+
+    reg uart_tx_done_latch;
+    reg uart_rx_ready_latch;
+    always @(posedge clk or posedge reset) begin
+        if (reset) begin
+            uart_tx_done_latch  <= 0;
+            uart_rx_ready_latch <= 0;
+        end else begin
+            if (uart_tx_done)
+                uart_tx_done_latch  <= 1;
+            if (uart_rx_ready)
+                uart_rx_ready_latch <= 1;
+
+            if (MemWrite && mem_addr == UART_SR_ADDR) begin
+                if (rdReg2[1]) uart_tx_done_latch  <= 0;
+                if (rdReg2[2]) uart_rx_ready_latch <= 0;
+            end
+        end
+    end
+
+    reg [7:0] uart_rx_latch;
+    always @(posedge clk or posedge reset) begin
+        if (reset)
+            uart_rx_latch <= 0;
+        else if (uart_rx_ready)
+            uart_rx_latch <= uart_rx_data;
+    end
 
     wire is_timer0_mtime_h = (mem_addr == TIMER0_MTIME_H);
     wire is_timer0_mtime_l = (mem_addr == TIMER0_MTIME_L);
@@ -306,6 +345,12 @@ module rv32 (
         end
     end
 
+    localparam INT_MIN = 32'h8000_0000;
+
+    wire [63:0] mul_ss = $signed(alu_in1) * $signed(alu_in2);
+    wire [63:0] mul_uu = {32'b0, alu_in1} * {32'b0, alu_in2};
+    wire [63:0] mul_su = $signed(alu_in1) * {32'b0, alu_in2};
+
     always @* begin
         alu_in1 = (opcode == AUIPC) ? pc : rdReg1;
         if (ALUSrc) begin
@@ -325,6 +370,38 @@ module rv32 (
             SRA: alu = $signed(alu_in1) >>> alu_in2[4:0];
             SLT: alu = ($signed(alu_in1) < $signed(alu_in2)) ? 1 : 0;
             SLTU: alu = (alu_in1 < alu_in2) ? 1 : 0;
+            MUL: alu = mul_ss[31:0];
+            MULH: alu = mul_ss[63:32];
+            MULHU: alu = mul_uu[63:32];
+            MULHSU: alu = mul_su[63:32];
+            DIV: begin
+                if (alu_in2 == 0)
+                    alu = 32'hFFFFFFFF;
+                else if (alu_in1 == INT_MIN && alu_in2 == -1)
+                    alu = INT_MIN;
+                else
+                    alu = $signed(alu_in1) / $signed(alu_in2);
+            end
+            DIVU: begin
+                if (alu_in2 == 0)
+                    alu = 32'hFFFFFFFF;
+                else
+                    alu = alu_in1 / alu_in2;
+            end
+            REM: begin
+                if (alu_in2 == 0)
+                    alu = alu_in1;
+                else if (alu_in1 == INT_MIN && alu_in2 == -1)
+                    alu = 32'b0;
+                else
+                    alu = $signed(alu_in1) % $signed(alu_in2);
+            end
+            REMU: begin
+                if (alu_in2 == 0)
+                    alu = alu_in1;
+                else
+                    alu = alu_in1 % alu_in2;
+            end
             default: alu = alu_in1 + alu_in2;
         endcase
     end
@@ -370,7 +447,8 @@ module rv32 (
                is_timer0_mtime_l    ? timer0_mtime[31:0] :
                is_timer0_mtimecmp_h ? timer0_mtimecmp[63:32] :
                is_timer0_mtimecmp_l ? timer0_mtimecmp[31:0] :
-               is_uart_sr           ? {30'b0, uart_tx_done, uart_tx_active} :
+               is_uart_rx           ? uart_rx_latch :
+               is_uart_sr           ? {29'b0, uart_rx_ready_latch, uart_tx_done_latch, uart_tx_active} :
                                       mem[mem_addr >> 2];
 
     always @* begin
@@ -456,6 +534,18 @@ module rv32 (
                             3'h0: ALUCtrl = SUB;
                             3'h5: ALUCtrl = SRA;
                             default: ALUCtrl = ADD;
+                        endcase
+                    end
+                    7'h01: begin
+                        case (instruction[14:12])
+                            3'h0: ALUCtrl = MUL;
+                            3'h1: ALUCtrl = MULH;
+                            3'h2: ALUCtrl = MULHSU;
+                            3'h3: ALUCtrl = MULHU;
+                            3'h4: ALUCtrl = DIV;
+                            3'h5: ALUCtrl = DIVU;
+                            3'h6: ALUCtrl = REM;
+                            3'h7: ALUCtrl = REMU;
                         endcase
                     end
                     default: ALUCtrl = ADD;
